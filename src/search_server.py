@@ -4,6 +4,8 @@ import rospy
 import actionlib
 
 from tuos_msgs.msg import SearchAction, SearchFeedback, SearchResult, SearchGoal
+from robot_controller import RobotMove
+
 
 from math import sqrt, pow
 
@@ -16,6 +18,9 @@ class SearchActionServer():
 
         self.actionserver = actionlib.SimpleActionServer("/bot_search",SearchAction, self.action_server_launcher, auto_start=False )
         self.actionserver.start()
+
+        #TODO: add robot controller
+        self.vel_controller = RobotMove()
 
         rospy.loginfo("The 'Search Action Server' is active...")
 
@@ -48,6 +53,7 @@ class SearchActionServer():
         if success:
             rospy.loginfo("approach completed successfully.")
             #TODO: stop robot
+            self.vel_controller.stop()
             self.actionserver.set_succeeded(self.result)
 
     def main(self):
