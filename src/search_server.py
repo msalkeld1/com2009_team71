@@ -4,7 +4,7 @@ import rospy
 import actionlib
 
 from tuos_msgs.msg import SearchAction, SearchFeedback, SearchResult, SearchGoal
-from robot_controller import RobotMove
+from robot_controller import RobotMove, RobotLaserScan
 
 
 from math import sqrt, pow
@@ -21,6 +21,7 @@ class SearchActionServer():
 
         #TODO: add robot controller
         self.vel_controller = RobotMove()
+        self.lidar_controller = RobotLaserScan()
 
         rospy.loginfo("The 'Search Action Server' is active...")
 
@@ -46,6 +47,10 @@ class SearchActionServer():
             return
         
         print(f"Search goal received: fwd_vel = {vel:.2f} m/s, approach_distance = {dist:.2f} m.")
+
+        #Gets information about obstacles ahead using lidar controller
+        self.closest_object = self.lidar_controller.min_distance
+        self.closest_object_location = self.lidar_controller.closest_object_position
 
         #TODO: implement moving and obstacle avoidance
 
