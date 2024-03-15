@@ -1,6 +1,8 @@
 <launch>
+    <include file="$(find tuos_simulations)/launch/nav_world.launch" />
     <node name="search_action_server" pkg="com2009_team71" type="search_server.py" output="screen">
     </node>
     <node name="search_action_client" pkg="com2009_team71" type="search_client.py" output="screen">
     </node>
+    
 </launch>

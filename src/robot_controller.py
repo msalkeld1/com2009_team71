@@ -34,7 +34,7 @@ class RobotLaserScan(object):
         front_arc = np.array(left_arc[::-1] + right_arc[::-1])
 
         self.min_distance = front_arc.min()
-        arc_angles = np.arrange(-20, 21)
+        arc_angles = np.arange(-20, 21)
         self.closest_object_position = arc_angles[np.argmin(front_arc)]
 
     def __init__(self):
