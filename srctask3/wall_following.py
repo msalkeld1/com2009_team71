@@ -1,148 +1,122 @@
 #!/usr/bin/env python3
 
+import math
 import rospy
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
+from nav_msgs.msg import Odometry
+import numpy as np
 
-class WallFollowing:
-    frontLeft = 0
-    frontRight = 0
-    front = 0
-    left = 0
-    right = 0
-    
-    state = 0
-    states = {
-        0: 'find the wall',
-        1: 'turn right',
-        2: 'follow the wall'
-    }
+class WallFollowing():
+    def __init__(self):
+        # Initialize the ROS node
+        rospy.init_node('wall_follower', anonymous=True)
+        
+        # Publisher for commanding robot movement
+        self.pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
+        
+        # Rate for the main loop
+        self.rate = rospy.Rate(10)  # 10 Hz
+        
+        # Object for holding velocity commands
+        self.vel_cmd = Twist()
+        
+        # Array to hold the laser scan data in the front arc
+        self.front_arc = np.zeros(360)
+        
+        # Variables to hold current left and right distances
+        self.current_left = float('inf')
+        self.current_right = float('inf')
+        
+        # Variables for odometry-based position tracking
+        self.current_position = None
+        self.position_history = []
+        self.position_threshold = 0.5  # Threshold to check for revisited positions
+        
+        # Flag to indicate shutdown
+        self.ctrl_c = False
+        
+        # Subscriber to the LiDAR data topic
+        self.lidar_subscriber = rospy.Subscriber('/scan', LaserScan, self.callback_lidar)
+        
+        # Subscriber to the Odometry data topic
+        self.odom_subscriber = rospy.Subscriber('/odom', Odometry, self.callback_odom)
+        
+        # Register shutdown hook
+        rospy.on_shutdown(self.shutdownhook)
+        
+        rospy.loginfo("Wall following node is active...")
 
-    def change_state(self, newState):
-        self.state = newState
+    def shutdownhook(self):
+        # Stop the robot when shutting down the node
+        self.vel_cmd.linear.x = 0.0
+        self.vel_cmd.angular.z = 0.0
+        self.pub.publish(self.vel_cmd)
+        self.ctrl_c = True
 
-    def findTheWall(self):
-        if self.front >= 0.5:
-            cmd_vel_msg = Twist()
-            cmd_vel_msg.linear.x = 0.15
-            cmd_vel_msg.angular.z = 0
-            self.cmd_pub.publish(cmd_vel_msg)          
-            return False
+    def callback_odom(self, data):
+        # Extract the position from odometry data
+        position = data.pose.pose.position
+        self.current_position = (position.x, position.y)
+        
+        # Check if current position is close to any previously visited position
+        if any(math.hypot(position.x - pos[0], position.y - pos[1]) < self.position_threshold for pos in self.position_history):
+            self.at_previous_position = True
         else:
-            self.turn_right(small_turn = False)
-            self.change_state(2)
-            return True
-    def go_straight(self):
-        cmd_vel_msg = Twist()
-        cmd_vel_msg.linear.x = 0.15
-        cmd_vel_msg.angular.z = 0
-        self.cmd_pub.publish(cmd_vel_msg)
+            self.at_previous_position = False
+            self.position_history.append(self.current_position)
 
-    def follow_wall(self):
-            d = 0.65
-            obstacle_dist = 1
+    def callback_lidar(self, lidar_data):
+        # Extract relevant slices from LiDAR data arrays
+        left_arc = lidar_data.ranges[0:91]
+        right_arc = lidar_data.ranges[270:360]
+        self.front_arc = np.array(left_arc[::-1] + right_arc[::-1])
+        
+        # Update the current left and right distances
+        self.current_left = lidar_data.ranges[90]
+        self.current_right = lidar_data.ranges[270]
 
-            # Check if there's enough space on the left to move forward
-            if self.front > d and self.left < d and self.right < d:
-                self.go_straight()
-                state_description = 'case 1 - moving forward'
-            # Check if there's an obstacle in front and to the left, indicating a need to turn right
-            elif self.front < d and self.left < d and self.right > d:
-                self.stop()
-                self.turn_right(True)
-                state_description = 'case 2 - turning right to follow the wall'           
-            elif self.front < d and self.left > d and self.right > d:
-                self.stop()
-                self.turn_left(False)
-                state_description = 'case 3 - moving forward'
-            elif self.frontLeft < d and self.frontRight > d:
-                self.stop()
-                self.turn_right(True)
-                state_description = 'case 2 - turning right to follow the wall'
-            elif self.frontRight < d and self.frontLeft > d and self.left > d:
-                self.stop()
-                self.turn_left(True)
-                state_description = 'case 5 - turning right to follow the wall'
-            elif self.frontLeft < d and self.left > d:
-                self.stop()
-                self.turn_left(True)
-                state_description = 'case 5 - turning right to follow the wall'
-            elif self.frontLeft < d and self.left > d and self.right < d:
-                self.stop()
-                self.turn_left(True)
-                state_description = 'case 5 - turning right to follow the wall'
+    def main_loop(self):
+        while not self.ctrl_c:
+            # Define sectors from the LiDAR data
+            min_right = np.min(self.front_arc[120:140])
+            min_front = np.min(self.front_arc[80:100])
+            min_left = np.min(self.front_arc[20:40])
+            max_left = np.max(self.front_arc[20:40])
 
-            elif self.front > d and self.left > d and self.frontLeft < d :
-                self.stop()
-                self.turn_left(False)
-                state_description = 'case 4 - moving forward'
-            
-            # Check if there's an obstacle on the right and in front, indicating the need to turn left       
-           
-            # If none of the above conditions are met, keep moving forward            
+            if self.at_previous_position:
+                # If at a previously visited position, turn to find a new path
+                self.vel_cmd.angular.z = 1.5  # Adjust the turning rate as necessary
+                self.vel_cmd.linear.x = 0
+                print("Avoiding previously visited spot")
+            elif min_front < 0.5 and min_left < 0.35:
+                # Too close to a front obstacle, need to turn right
+                self.vel_cmd.angular.z = -2.0
+                self.vel_cmd.linear.x = 0
+                print('Turning right due to obstacle')
+            elif min_front < 0.5 and max_left > 0.6:
+                # Too close to the left wall, turn right slightly
+                self.vel_cmd.angular.z = 2.0
+                self.vel_cmd.linear.x = 0
+                print('Adjusting path from left wall')
+            elif min_left > 0.6 and min_right > 0.6 and min_front > 0.6:
+                # Both sides are clear, move forward faster
+                self.vel_cmd.linear.x = 0.1
+                self.vel_cmd.angular.z = 0.8
+                print('Moving forward')
             else:
-                self.go_straight()
-                state_description = 'case 5 - moving forward'
+                # Default behavior to move forward
+                self.vel_cmd.linear.x = 0.2
+                self.vel_cmd.angular.z = 0
+                print('Default forward motion')
 
-            rospy.loginfo(state_description)
-
-
-
-    def stop(self):
-        cmd_vel_msg = Twist()
-        cmd_vel_msg.linear.x = 0
-        cmd_vel_msg.angular.z = 0
-        self.cmd_pub.publish(cmd_vel_msg)
-
-    def main(self):
-        rospy.init_node('wall_following')
-        self.cmd_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-        rospy.Subscriber('/scan', LaserScan, self.scan_callback)        
-        rate = rospy.Rate(1)
-        while not rospy.is_shutdown():
-            if self.state == 0:
-                print(self.state)
-                self.findTheWall()          
-            elif self.state == 2:
-                print(self.state)
-                self.follow_wall()
-            else:
-                rospy.logerr('Unknown state!')
-            rate.sleep()
-    
-    def turn_right(self, small_turn):
-         
-         cmd_vel_msg = Twist()
-         if(small_turn == True):
-            cmd_vel_msg.linear.x = 0
-            cmd_vel_msg.angular.z = -1.50
-         elif(small_turn == False):
-             cmd_vel_msg.linear.x = 0
-             cmd_vel_msg.angular.z = -2.24
-         self.cmd_pub.publish(cmd_vel_msg)
-         
-    def turn_left(self, small_turn):
-         
-         cmd_vel_msg = Twist()
-         if(small_turn):
-            cmd_vel_msg.linear.x = 0
-            cmd_vel_msg.angular.z = 1
-         else:
-             cmd_vel_msg.linear.x = 0
-             cmd_vel_msg.angular.z = 2.20
-         self.cmd_pub.publish(cmd_vel_msg)
-
-    def scan_callback(self, msg):
-        self.front = max(msg.ranges[0 : 5])
-        self.right = msg.ranges[270]
-        self.frontLeft = max(msg.ranges[5:89])
-        self.frontRight = max(msg.ranges[290 : 355])
-        self.left = msg.ranges[90]
-
+            # Publish the velocity command
+            self.pub.publish(self.vel_cmd)
+            self.rate.sleep()
 
 if __name__ == '__main__':
+    wall_follower = WallFollowing()
     try:
-        wall_following = WallFollowing()
-        wall_following.main()
+        wall_follower.main_loop()
     except rospy.ROSInterruptException:
         pass
