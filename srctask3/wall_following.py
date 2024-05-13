@@ -4,7 +4,6 @@ import math
 import rospy
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
-from nav_msgs.msg import Odometry
 import numpy as np
 
 class WallFollowing():
@@ -28,19 +27,11 @@ class WallFollowing():
         self.current_left = float('inf')
         self.current_right = float('inf')
         
-        # Variables for odometry-based position tracking
-        self.current_position = None
-        self.position_history = []
-        self.position_threshold = 0.5  # Threshold to check for revisited positions
-        
         # Flag to indicate shutdown
         self.ctrl_c = False
         
         # Subscriber to the LiDAR data topic
         self.lidar_subscriber = rospy.Subscriber('/scan', LaserScan, self.callback_lidar)
-        
-        # Subscriber to the Odometry data topic
-        self.odom_subscriber = rospy.Subscriber('/odom', Odometry, self.callback_odom)
         
         # Register shutdown hook
         rospy.on_shutdown(self.shutdownhook)
@@ -53,9 +44,8 @@ class WallFollowing():
         self.vel_cmd.angular.z = 0.0
         self.pub.publish(self.vel_cmd)
         self.ctrl_c = True
-
     def callback_odom(self, data):
-        # Extract the position from odometry data
+        # Extract the position and orientation from odometry data
         position = data.pose.pose.position
         self.current_position = (position.x, position.y)
         
@@ -64,8 +54,7 @@ class WallFollowing():
             self.at_previous_position = True
         else:
             self.at_previous_position = False
-            self.position_history.append(self.current_position)
-
+            self.position_history.append((position.x, position.y))
     def callback_lidar(self, lidar_data):
         # Extract relevant slices from LiDAR data arrays
         left_arc = lidar_data.ranges[0:91]
@@ -82,33 +71,32 @@ class WallFollowing():
             min_right = np.min(self.front_arc[120:140])
             min_front = np.min(self.front_arc[80:100])
             min_left = np.min(self.front_arc[20:40])
-            max_left = np.max(self.front_arc[20:40])
+            max_left = np.max(self.front_arc[20:40])  # Sector for left side
 
-            if self.at_previous_position:
-                # If at a previously visited position, turn to find a new path
-                self.vel_cmd.angular.z = 1.5  # Adjust the turning rate as necessary
-                self.vel_cmd.linear.x = 0
-                print("Avoiding previously visited spot")
-            elif min_front < 0.5 and min_left < 0.35:
+            # Simple reactive controller
+            if min_front < 0.5 and min_left < 0.35:
                 # Too close to a front obstacle, need to turn right
-                self.vel_cmd.angular.z = -2.0
+                self.vel_cmd.angular.z = -2
                 self.vel_cmd.linear.x = 0
-                print('Turning right due to obstacle')
+                print('1')            
             elif min_front < 0.5 and max_left > 0.6:
                 # Too close to the left wall, turn right slightly
-                self.vel_cmd.angular.z = 2.0
+                self.vel_cmd.angular.z = 2
                 self.vel_cmd.linear.x = 0
-                print('Adjusting path from left wall')
+                print('3')
+            
             elif min_left > 0.6 and min_right > 0.6 and min_front > 0.6:
                 # Both sides are clear, move forward faster
                 self.vel_cmd.linear.x = 0.1
                 self.vel_cmd.angular.z = 0.8
-                print('Moving forward')
+                print('5')
+            
+            
             else:
                 # Default behavior to move forward
+                print('6')
                 self.vel_cmd.linear.x = 0.2
                 self.vel_cmd.angular.z = 0
-                print('Default forward motion')
 
             # Publish the velocity command
             self.pub.publish(self.vel_cmd)
