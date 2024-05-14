@@ -70,25 +70,35 @@ class WallFollowing():
             # Define sectors from the LiDAR data
             min_right = np.min(self.front_arc[120:140])
             min_front = np.min(self.front_arc[80:100])
+            max_front = np.max(self.front_arc[80:100])
+
             min_left = np.min(self.front_arc[20:40])
             max_left = np.max(self.front_arc[20:40])  # Sector for left side
 
             # Simple reactive controller
-            if min_front < 0.5 and min_left < 0.35:
+            if min_front < 0.5 and min_left < 0.5:
                 # Too close to a front obstacle, need to turn right
-                self.vel_cmd.angular.z = -2
+                self.vel_cmd.angular.z = -1.5
                 self.vel_cmd.linear.x = 0
-                print('1')            
-            elif min_front < 0.5 and max_left > 0.6:
+                print('1')  
+                   
+            elif min_front < 0.5 and min_left > 0.6:
                 # Too close to the left wall, turn right slightly
-                self.vel_cmd.angular.z = 2
+                self.vel_cmd.angular.z = 1.8
                 self.vel_cmd.linear.x = 0
                 print('3')
+
+            elif min_front > 0.5 and min_left > 0.6:
+                # Too close to the left wall, turn right slightly
+                self.vel_cmd.angular.z = 0.8
+                self.vel_cmd.linear.x = 0
+                print('3')
+           
             
             elif min_left > 0.6 and min_right > 0.6 and min_front > 0.6:
                 # Both sides are clear, move forward faster
-                self.vel_cmd.linear.x = 0.1
-                self.vel_cmd.angular.z = 0.8
+                self.vel_cmd.linear.x = 0.2
+                self.vel_cmd.angular.z = 0.5
                 print('5')
             
             
@@ -97,6 +107,20 @@ class WallFollowing():
                 print('6')
                 self.vel_cmd.linear.x = 0.2
                 self.vel_cmd.angular.z = 0
+                if(min_left < 1 and min_right < 1):
+                    if(min_left - min_right < 0):
+                        self.vel_cmd.linear.z = 0.2
+                        print('-5')
+
+                    elif (min_left - min_right > 0):
+                        self.vel_cmd.linear.z = -0.2
+                        print('--5')
+
+                    else: 
+                        self.vel_cmd.linear.z = 0
+                    self.pub.publish(self.vel_cmd)
+                    
+                    
 
             # Publish the velocity command
             self.pub.publish(self.vel_cmd)
