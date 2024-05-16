@@ -96,6 +96,8 @@ class MazeNavigation():
             cv2.imwrite(str(self.full_image_path), self.crop_img)
             print(f"Captured the target coulour(->'{self.target}'<-) beacon!!! \n"
                   f"Saving the the target location '{self.full_image_path}'")
+            self.save_map()
+            rospy.sleep()
         else:
             print(f"Target Beacon -> '{self.target}' <- No Here!!!")        
         cv2.waitKey(1)
@@ -106,6 +108,19 @@ class MazeNavigation():
         # publish
         self.pub.publish(self.vel_cmd)
         self.ctrl_c = True
+
+    def save_map(self):
+        map_name = "task4_map"
+        launch = roslaunch.scriptapi.ROSLaunch()
+        launch.start()
+        print(f"Saving map at time: {rospy.get_time()}")
+        node = roslaunch.core.Node(
+            package="map_server",
+            node_type="map_saver",
+            args=f"-f {map_name}",
+            output="screen"
+        )
+        process = launch.launch(node)
 
     def callback_lidar(self, lidar_data):        
         #left arc for 0 to 90 degrees, right arc for 270 to 0 degrees
