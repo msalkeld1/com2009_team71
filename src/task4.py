@@ -69,7 +69,7 @@ class MazeNavigation():
         hsv_img = cv2.cvtColor(self.crop_img, cv2.COLOR_BGR2HSV)
 
        #recognize the beacon in the robot view
-        if self.target == "yellow":  #use Turquoise here, will replace to yellow
+        if self.target == "yellow":  
             mask = cv2.inRange(hsv_img, ( 20, 100, 100), (30, 255, 255))
         elif self.target == "red":
             mask = cv2.inRange(hsv_img, ( 0, 185, 100), (10, 255, 255))
@@ -128,15 +128,7 @@ class MazeNavigation():
         right_arc = lidar_data.ranges[-90:]
         #front arc is 270 to 0 + 0 to 90, so 270 to 90 degrees
         self.front_arc = np.array(left_arc[::-1] + right_arc[::-1])
-        self.all_angles =  lidar_data.ranges
-        # i = 0
-        # while i < 360:
-        #     print(f"  @@@ starting self.all_angles = {i} =  {self.all_angles[i]} meters")
-        #     i = i + 1
-
-        # print(f"  **** starting left_arc =  {left_arc} meters")
-        # print(f"  **** starting sright_arc =  {right_arc} meters")
-        # print(f"  **** starting self.front_arc =  {self.front_arc} meters")               
+        self.all_angles =  lidar_data.ranges              
 
     def main_loop(self):
         while not self.ctrl_c:          
