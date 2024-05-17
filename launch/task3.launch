@@ -1,7 +1,7 @@
 <launch>
     <!-- Launch the ROS nodes -->
     
-    <node pkg="com2009_team71" type="wall_following.py" name="wall_follwoing_server" output="screen"/>
+    <node pkg="com2009_team71" type="task3.py" name="task3_launch" output="screen"/>
 
 
 </launch>
