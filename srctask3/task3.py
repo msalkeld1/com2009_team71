@@ -16,7 +16,7 @@ class MazeNavigation():
         self.rate = rospy.Rate(10) 
 
         self.vel_cmd = Twist()
-        #initializing an array with 360 items for 360 degrees
+        #initializing an array with 360 (integer 0) items for 360 degrees
         self.right_arc = np.zeros(360)
         self.front_arc = np.zeros(360)
         self.ctrl_c = False
