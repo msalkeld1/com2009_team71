@@ -15,7 +15,7 @@ class WallFollowing():
         self.pub = rospy.Publisher('cmd_vel', Twist, queue_size=10)
         
         # Rate for the main loop
-        self.rate = rospy.Rate(10)  # 10 Hz
+        self.rate = rospy.Rate(50)  # 10 Hz
         
         # Object for holding velocity commands
         self.vel_cmd = Twist()
@@ -44,6 +44,20 @@ class WallFollowing():
         self.vel_cmd.angular.z = 0.0
         self.pub.publish(self.vel_cmd)
         self.ctrl_c = True
+    def pid(self, min_left, min_right):
+        kp = 3
+        reference_input = 0
+        feedback_signal = min_left - min_right
+        error = feedback_signal - reference_input 
+
+        ang_vel = kp * error
+        if ang_vel < -1.82:
+            ang_vel = -1.82
+        elif ang_vel > 1.82:
+            ang_vel = 1.82
+        return ang_vel
+
+        print(f"Error = {error:.1f} pixels | Control Signal = {ang_vel:.2f} rad/s")
     def callback_odom(self, data):
         # Extract the position and orientation from odometry data
         position = data.pose.pose.position
@@ -58,6 +72,9 @@ class WallFollowing():
     def callback_lidar(self, lidar_data):
         # Extract relevant slices from LiDAR data arrays
         left_arc = lidar_data.ranges[0:91]
+        left = lidar_data.ranges[90]
+        right = lidar_data.ranges[270]
+
         right_arc = lidar_data.ranges[270:360]
         self.front_arc = np.array(left_arc[::-1] + right_arc[::-1])
         
@@ -76,19 +93,19 @@ class WallFollowing():
             max_left = np.max(self.front_arc[20:40])  # Sector for left side
 
             # Simple reactive controller
-            if min_front < 0.5 and min_left < 0.5:
+            if min_front <= 0.8 and min_left < 0.4 and max_right > 0.4:
                 # Too close to a front obstacle, need to turn right
-                self.vel_cmd.angular.z = -1.5
-                self.vel_cmd.linear.x = 0
+                self.vel_cmd.angular.z = -1.8
+                self.vel_cmd.linear.x = 0.1
                 print('1')  
                    
-            elif min_front < 0.5 and min_left > 0.6:
+            elif min_front < 0.4 and min_left > 0.6:
                 # Too close to the left wall, turn right slightly
                 self.vel_cmd.angular.z = 1.8
-                self.vel_cmd.linear.x = 0
+                self.vel_cmd.linear.x = 0.05
                 print('3')
 
-            elif min_front > 0.5 and min_left > 0.6:
+            elif min_front >= 0.4 and min_left > 0.6:
                 # Too close to the left wall, turn right slightly
                 self.vel_cmd.angular.z = 0.8
                 self.vel_cmd.linear.x = 0
@@ -97,7 +114,7 @@ class WallFollowing():
             
             elif min_left > 0.6 and min_right > 0.6 and min_front > 0.6:
                 # Both sides are clear, move forward faster
-                self.vel_cmd.linear.x = 0.2
+                self.vel_cmd.linear.x = 0.26
                 self.vel_cmd.angular.z = 0.5
                 print('5')
             
@@ -105,19 +122,11 @@ class WallFollowing():
             else:
                 # Default behavior to move forward
                 print('6')
-                self.vel_cmd.linear.x = 0.2
+                self.vel_cmd.linear.x = 0.25
                 self.vel_cmd.angular.z = 0
-                if(min_left < 1 and min_right < 1):
-                    if(min_left - min_right < 0):
-                        self.vel_cmd.linear.z = 0.2
-                        print('-5')
-
-                    elif (min_left - min_right > 0):
-                        self.vel_cmd.linear.z = -0.2
-                        print('--5')
-
-                    else: 
-                        self.vel_cmd.linear.z = 0
+                if(min_left < 0.5 and min_right < 0.5):
+                    self.vel_cmd.angular.z = self.pid(min_left, min_right)
+                    print(self.vel_cmd.angular.z)
                     self.pub.publish(self.vel_cmd)
                     
                     
