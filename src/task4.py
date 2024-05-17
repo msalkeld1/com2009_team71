@@ -31,7 +31,7 @@ class MazeNavigation():
         rospy.loginfo("the 'Maze Navigation' node is active...")
         # photoing part
         # Subscriber to the camera data topic
-        self.camera_subscriber = rospy.Subscriber("/camera/rgb/image_raw",
+        self.camera_subscriber = rospy.Subscriber("/camera/color/image_raw",
             Image, self.camera_callback)
         
         # Liking to the CvBridege
