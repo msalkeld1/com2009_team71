@@ -1,7 +1,0 @@
-<launch>
-    <arg name="target_colour" default="blue" />
-    <include file="$(find turtlebot3_slam)/launch/turtlebot3_slam.launch" />
-    <node pkg="com2009_team71" type="task4.py" name="task4" output="screen">
-        <param name="target_colour" value="$(arg target_colour)" />
-    </node>
-</launch>
